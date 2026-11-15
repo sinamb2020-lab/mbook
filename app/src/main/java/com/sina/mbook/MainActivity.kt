@@ -11,6 +11,8 @@ import android.webkit.JavascriptInterface
 import android.webkit.WebChromeClient
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import android.provider.Settings
+import org.json.JSONArray
 import java.io.File
 import java.net.HttpURLConnection
 import java.net.URL
@@ -70,12 +72,49 @@ class MainActivity : Activity() {
 }
 
 class Bridge(private val c: Context) {
+    private val p get() = c.getSharedPreferences("m", 0)
+
     @JavascriptInterface
     fun sync(today: String, month: String) {
-        c.getSharedPreferences("m", 0).edit().putString("t", today).putString("m", month).apply()
+        p.edit().putString("t", today).putString("m", month).apply()
         val mgr = AppWidgetManager.getInstance(c)
-        val ids = mgr.getAppWidgetIds(ComponentName(c, Widget::class.java))
-        Widget.update(c, mgr, ids)
+        Widget.update(c, mgr, mgr.getAppWidgetIds(ComponentName(c, Widget::class.java)))
         SmallWidget.update(c, mgr, mgr.getAppWidgetIds(ComponentName(c, SmallWidget::class.java)))
+    }
+
+    @JavascriptInterface
+    fun hasAccess(): Boolean =
+        (Settings.Secure.getString(c.contentResolver, "enabled_notification_listeners") ?: "").contains(c.packageName)
+
+    @JavascriptInterface
+    fun openAccess() {
+        c.startActivity(Intent("android.settings.ACTION_NOTIFICATION_LISTENER_SETTINGS").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+    }
+
+    @JavascriptInterface
+    fun seen(): String = p.getString("seen", "{}") ?: "{}"
+
+    @JavascriptInterface
+    fun allowed(): String = JSONArray((p.getStringSet("allowed", emptySet()) ?: emptySet()).toList()).toString()
+
+    @JavascriptInterface
+    fun setAllowed(j: String) {
+        val a = JSONArray(j)
+        val s = HashSet<String>()
+        for (i in 0 until a.length()) s.add(a.getString(i))
+        p.edit().putStringSet("allowed", s).apply()
+    }
+
+    @JavascriptInterface
+    fun pending(): String = synchronized(NotifListener.LOCK) { p.getString("pending", "[]") ?: "[]" }
+
+    @JavascriptInterface
+    fun removePending(id: String) {
+        synchronized(NotifListener.LOCK) {
+            val a = JSONArray(p.getString("pending", "[]") ?: "[]")
+            val o = JSONArray()
+            for (i in 0 until a.length()) if (a.getJSONObject(i).getString("id") != id) o.put(a.getJSONObject(i))
+            p.edit().putString("pending", o.toString()).apply()
+        }
     }
 }
