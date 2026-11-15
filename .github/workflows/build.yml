@@ -1,3 +1,4 @@
+
 name: Build APK
 on: [push, workflow_dispatch]
 jobs:
@@ -12,8 +13,9 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: 8.7
-      - run: gradle :app:assembleDebug
+      - run: gradle :app:assembleDebug -PREPO=${{ github.repository }} -PBRANCH=${{ github.ref_name }} -PVC=${{ github.run_number }}
       - uses: actions/upload-artifact@v4
         with:
           name: Mbook-apk
           path: app/build/outputs/apk/debug/app-debug.apk
+ 
